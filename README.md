@@ -1,47 +1,47 @@
 # omarchy-kavita-reader
 
-Quickshell-Plugin für Omarchy: verbindet sich mit [Kavita](https://www.kavitareader.com/) und liest EBooks (EPUB, PDF, CBZ/CBR) direkt aus der Leiste.
+Quickshell plugin for Omarchy: connects to [Kavita](https://www.kavitareader.com/) and reads eBooks (EPUB, PDF, CBZ/CBR) straight from the bar.
 
 ## Features
 
-- Login an Kavita (JWT)
-- Bibliotheken → Serien → Bücher durchsuchen
-- Live-Suche in der Serien-Spalte (case-insensitiv, Teilstring, z. B. `C#`)
-- EPUB: wird nach PDF konvertiert und im PDF-Viewer angezeigt
-- PDF: `QtQuick.Pdf` mit Fit-to-Width und vertikalem Scrollen
-- CBZ/CBR: Download, Entpacken und Anzeige als Bilder
-- Lokaler Cache unter `~/.cache/quickshell/kavita-reader/`
+- Login to Kavita (JWT)
+- Browse libraries → series → books
+- Live search in the series column (case-insensitive substring, e.g. `C#`)
+- EPUB: converted to PDF and shown in the PDF viewer
+- PDF: `QtQuick.Pdf` with fit-to-width and vertical scrolling
+- CBZ/CBR: download, unpack and display as images
+- Local cache at `~/.cache/quickshell/kavita-reader/`
 
-## Voraussetzungen
+## Requirements
 
-Für CBR werden je nach System `unrar`, `bsdtar` oder `7z` benötigt, für CBZ reicht `unzip`.
+For CBR you need `unrar`, `bsdtar` or `7z` depending on your system; for CBZ, `unzip` is enough.
 
-EPUB wird konvertiert (Quickshell kann kein QtWebEngine hosten): bevorzugt `ebook-convert` (Calibre), sonst `pandoc` mit LaTeX-Engine.
+EPUB is converted (Quickshell cannot host QtWebEngine): preferably with `ebook-convert` (Calibre), otherwise `pandoc` with a LaTeX engine.
 
-## Bedienung
+## Usage
 
-Das Plugin stellt ein Bar-Widget (Buch-Icon) bereit, das das Panel öffnet. Über den IPC-Target `saigkill.kavita-reader` stehen `open`, `close`, `show`, `hide` und `toggle` zur Verfügung.
+The plugin provides a bar widget (book icon) that opens the panel. The IPC target `saigkill.kavita-reader` exposes `open`, `close`, `show`, `hide` and `toggle`.
 
-## Kavita-API
+## Kavita API
 
-Verwendete Endpunkte:
+Endpoints used:
 
-| Zweck | Aufruf |
+| Purpose | Call |
 |---|---|
 | Login | `POST /api/Account/login` |
-| Bibliotheken | `GET /api/Library/libraries` |
-| Serien einer Bibliothek | `POST /api/Series/v2` mit Filter (`field: 19` = Libraries, `comparison: 0` = Is) |
-| Bücher (Chapters) | `GET /api/Series/volumes?seriesId=` |
+| Libraries | `GET /api/Library/libraries` |
+| Series of a library | `POST /api/Series/v2` with filter (`field: 19` = Libraries, `comparison: 0` = Is) |
+| Books (chapters) | `GET /api/Series/volumes?seriesId=` |
 | Download | `GET /api/Download/chapter?chapterId=` |
 
-Der Authorization-Header kommt über die Umgebung (`$AUTH`) statt über die Prozessargumente, damit der Token nicht in `/proc` auftaucht.
+The Authorization header is passed via the environment (`$AUTH`) rather than the process arguments so the token does not show up in `/proc`.
 
 `MangaFormat`: 0 Image, 1 Archive (CBZ/CBR), 3 EPUB, 4 PDF.
 
-## Entwicklung
+## Development
 
-Im Verzeichnis `omarchy-kavita-reader/` bearbeiten. Quickshell lädt das Plugin bei Änderungen. Diese Version wird zusätzlich unter `~/.dotfiles/.config/omarchy/plugins/saigkill.kavita-reader/` installiert; beide Kopien werden identisch gehalten.
+Edit inside the `omarchy-kavita-reader/` directory. Quickshell reloads the plugin on changes. This version is additionally installed at `~/.dotfiles/.config/omarchy/plugins/saigkill.kavita-reader/`; both copies are kept identical.
 
-## Lizenz
+## License
 
 MIT
