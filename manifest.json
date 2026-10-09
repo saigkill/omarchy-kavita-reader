@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "saigkill.kavita-reader",
+  "name": "Kavita Reader",
+  "version": "0.1.0",
+  "author": "Sascha Manns",
+  "license": "MIT",
+  "description": "Connect to your Kavita instance, browse your library and read eBooks (EPUB, PDF, CBZ) directly from the bar.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Kavita Reader",
+    "description": "Opens the Kavita reader panel to browse and read books.",
+    "category": "Media",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

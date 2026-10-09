@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { margin:0; padding:0; background:#1e1e1e; color:#eee; font-family: system-ui, -apple-system, sans-serif; }
+    #area { width:100vw; height:100vh; overflow:auto; display:flex; justify-content:center; }
+    #viewer { width:100%; height:100%; }
+    .epub-container { padding: 5vh 5vw; max-width: 85ch; margin: 0 auto; line-height: 1.8; }
+    .epub-container img { max-width:100%; height:auto; }
+    .controls { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); padding:8px 12px; border-radius:8px; display:flex; gap:8px; align-items:center; backdrop-filter:blur(4px); }
+    button { background:rgba(255,255,255,0.1); border:none; color:#eee; padding:6px 10px; border-radius:6px; cursor:pointer; }
+    button:hover { background:rgba(255,255,255,0.2); }
+    span { font-size:14px; opacity:0.9; }
+  </style>
+</head>
+<body>
+  <div id="area">
+    <div id="viewer"></div>
+  </div>
+  <div class="controls">
+    <button id="prev">←</button>
+    <span id="pageInfo">--/--</span>
+    <button id="next">→</button>
+    <button id="tocBtn">TOC</button>
+    <button id="fitWidth">Width</button>
+    <button id="fitHeight">Height</button>
+  </div>
+  <script src="zip.min.js"></script>
+  <script src="epub.js"></script>
+  <script>
+    var book = null;
+    var rendition = null;
+    var displayed = null;
+
+    function loadEpub(path) {
+      try {
+        book = ePub(path);
+        rendition = book.renderTo("viewer", {
+          width: "100%",
+          height: "100%",
+          spread: "none",
+          manager: "default"
+        });
+        displayed = rendition.display();
+        updatePageInfo();
+
+        book.loaded.navigation.then(function(nav) {
+          // TOC optional
+        });
+
+        rendition.on("relocated", function(loc) {
+          updatePageInfo();
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function updatePageInfo() {
+      if (!book || !displayed) return;
+      book.pageListReady.then(function(pageList) {
+        var current = rendition.location.start.displayed;
+        if (current && current.pageRange) {
+          var total = book.locations.total();
+          document.getElementById("pageInfo").textContent = current.pageRange;
+        }
+      });
+    }
+
+    document.getElementById("prev").onclick = function() {
+      if (rendition) rendition.prev();
+    };
+    document.getElementById("next").onclick = function() {
+      if (rendition) rendition.next();
+    };
+    document.getElementById("fitWidth").onclick = function() {
+      if (rendition) rendition.themes.default({ "body": {} });
+      rendition.flow("scrolled");
+    };
+    document.getElementById("fitHeight").onclick = function() {
+      if (rendition) rendition.flow("paginated");
+    };
+    document.getElementById("tocBtn").onclick = function() {
+      if (rendition) rendition.display(book.navigation.toc[0].href);
+    };
+
+    window.loadEpub = loadEpub;
+  </script>
+</body>
+</html>
