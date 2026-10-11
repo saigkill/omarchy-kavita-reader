@@ -12,6 +12,8 @@ Item {
   property string kavitaUrl: ""
   property string username: ""
   property string token: ""
+  property string refreshToken: ""
+  property bool refreshTried: false
 
   readonly property bool loggedIn: token.length > 0
 
@@ -19,6 +21,10 @@ Item {
   // Authorization header from the environment instead of the world-readable
   // process arguments in /proc.
   readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/quickshell/kavita-reader"
+  // The session survives a reboot: URL, user and tokens (never the password)
+  // live in a private file outside the plugin directory.
+  readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/omarchy-kavita-reader"
+  readonly property string sessionFile: stateDir + "/session.json"
   readonly property var authEnv: ({ AUTH: "Authorization: Bearer " + svc.token })
 
   signal errorOccurred(string message)
@@ -28,6 +34,47 @@ Item {
   signal bookDownloaded(string path)
   signal cbzUnpacked(string dir, var images)
   signal epubConverted(string pdfPath)
+
+  Component.onCompleted: loadReq.running = true
+
+  function saveSession() {
+    saveReq.payload = JSON.stringify({
+      url: svc.kavitaUrl, username: svc.username,
+      token: svc.token, refreshToken: svc.refreshToken
+    })
+    saveReq.running = true
+  }
+
+  function clearSession() {
+    svc.token = ""
+    svc.refreshToken = ""
+    clearReq.running = true
+  }
+
+  // Only a 401 means the stored session is dead. Anything else (server or
+  // network not up yet right after boot) must keep it.
+  function handleHttpStatus(code) {
+    if (code !== "401") return false
+    if (svc.refreshToken === "" || svc.refreshTried) {
+      svc.clearSession()
+      svc.errorOccurred("Sitzung abgelaufen, bitte neu anmelden")
+      return true
+    }
+    svc.refreshTried = true
+    refreshReq.payload = JSON.stringify({ token: svc.token, refreshToken: svc.refreshToken })
+    refreshReq.command = ["curl", "-s", "-w", "\n%{http_code}", "-X", "POST",
+      svc.kavitaUrl + "/api/Account/refresh-token",
+      "-H", "Content-Type: application/json", "-d", "@-"]
+    refreshReq.running = true
+    return true
+  }
+
+  // Splits curl's "-w \n%{http_code}" output into body and status code.
+  function splitStatus(raw) {
+    var t = String(raw || "")
+    var i = t.lastIndexOf("\n")
+    return i < 0 ? { body: t, code: "" } : { body: t.slice(0, i), code: t.slice(i + 1).trim() }
+  }
 
   function login(url, user, password) {
     svc.kavitaUrl = String(url || "").replace(/\/+$/, "")
@@ -41,7 +88,7 @@ Item {
   function getLibraries() {
     if (!svc.loggedIn) return
     libsReq.environment = svc.authEnv
-    libsReq.command = ["bash", "-c", 'curl -s -H "$AUTH" "$1"',
+    libsReq.command = ["bash", "-c", 'curl -s -w "\\n%{http_code}" -H "$AUTH" "$1"',
       "bash", svc.kavitaUrl + "/api/Library/libraries"]
     libsReq.running = true
   }
@@ -185,7 +232,10 @@ Item {
         try {
           var res = JSON.parse(text)
           if (res && res.token) {
+            svc.refreshToken = res.refreshToken || ""
+            svc.refreshTried = false
             svc.token = res.token
+            svc.saveSession()
           } else {
             svc.errorOccurred("Login fehlgeschlagen")
           }
@@ -201,10 +251,86 @@ Item {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        var r = svc.splitStatus(text)
+        if (svc.handleHttpStatus(r.code)) return
         try {
-          svc.librariesLoaded(JSON.parse(text))
+          svc.librariesLoaded(JSON.parse(r.body))
         } catch (e) {
           svc.errorOccurred("Bibliotheken laden fehlgeschlagen")
+        }
+      }
+    }
+  }
+
+  Process {
+    id: loadReq
+    command: ["sh", "-c", 'cat "$1" 2>/dev/null', "sh", svc.sessionFile]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var s = JSON.parse(text)
+          if (s && s.token && s.url && !svc.loggedIn) {
+            svc.kavitaUrl = s.url
+            svc.username = s.username || ""
+            svc.refreshToken = s.refreshToken || ""
+            svc.token = s.token
+          }
+        } catch (e) {
+          // No stored session yet: the login form stays.
+        }
+      }
+    }
+  }
+
+  Process {
+    id: saveReq
+    property string payload: ""
+    stdinEnabled: true
+    command: ["sh", "-c",
+      'umask 077; mkdir -p "$1" && chmod 700 "$1" && cat > "$2.tmp" && mv "$2.tmp" "$2"',
+      "sh", svc.stateDir, svc.sessionFile]
+    onStarted: {
+      write(payload)
+      stdinEnabled = false
+    }
+    onRunningChanged: if (!running) stdinEnabled = true
+  }
+
+  Process {
+    id: clearReq
+    command: ["rm", "-f", svc.sessionFile]
+  }
+
+  Process {
+    id: refreshReq
+    property string payload: ""
+    stdinEnabled: true
+    onStarted: {
+      write(payload)
+      stdinEnabled = false
+    }
+    onRunningChanged: if (!running) stdinEnabled = true
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var r = svc.splitStatus(text)
+        try {
+          var res = JSON.parse(r.body)
+          if (res && res.token) {
+            svc.token = res.token
+            svc.refreshToken = res.refreshToken || svc.refreshToken
+            svc.refreshTried = false
+            svc.saveSession()
+            svc.getLibraries()
+            return
+          }
+        } catch (e) {}
+        if (r.code === "400" || r.code === "401") {
+          svc.clearSession()
+          svc.errorOccurred("Sitzung abgelaufen, bitte neu anmelden")
+        } else {
+          svc.errorOccurred("Sitzung konnte nicht erneuert werden")
         }
       }
     }

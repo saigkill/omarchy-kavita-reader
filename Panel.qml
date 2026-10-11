@@ -97,6 +97,15 @@ Panel {
     }
   }
 
+  // The session may already be restored from disk before this panel exists,
+  // in which case onLoggedInChanged never fires for it.
+  Component.onCompleted: {
+    if (root.svc && root.svc.loggedIn) {
+      stack.currentIndex = 1
+      root.svc.getLibraries()
+    }
+  }
+
   Connections {
     target: root.svc
     enabled: root.svc !== null
@@ -105,6 +114,8 @@ Panel {
       if (root.svc && root.svc.loggedIn) {
         stack.currentIndex = 1
         root.svc.getLibraries()
+      } else {
+        stack.currentIndex = 0
       }
     }
     function onLibrariesLoaded(list) { root.fill(libModel, list) }
@@ -187,10 +198,10 @@ Panel {
             TextField {
               id: urlField
               Layout.fillWidth: true
-              text: Model.DEFAULT_URL
+              text: (root.svc && root.svc.kavitaUrl) ? root.svc.kavitaUrl : Model.DEFAULT_URL
             }
             Label { text: "Benutzername"; color: root.contentForeground }
-            TextField { id: userField; Layout.fillWidth: true }
+            TextField { id: userField; Layout.fillWidth: true; text: root.svc ? root.svc.username : "" }
             Label { text: "Passwort"; color: root.contentForeground }
             TextField { id: passField; Layout.fillWidth: true; echoMode: TextInput.Password }
             Button {
