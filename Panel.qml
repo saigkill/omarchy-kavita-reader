@@ -89,7 +89,7 @@ Panel {
     } else {
       // EPUB and other ebook formats: convert to PDF first (Quickshell cannot
       // host a web engine), then show the result in the PDF viewer.
-      root.readerMessage = "EPUB wird konvertiert…"
+      root.readerMessage = "Converting EPUB…"
       pdfDoc.source = ""
       readerStack.currentIndex = 0
       stack.currentIndex = 2
@@ -179,7 +179,7 @@ Panel {
           }
           Item { Layout.fillWidth: true }
           Button {
-            text: "Schließen"
+            text: "Close"
             onClicked: root.close()
           }
         }
@@ -200,9 +200,9 @@ Panel {
               Layout.fillWidth: true
               text: (root.svc && root.svc.kavitaUrl) ? root.svc.kavitaUrl : Model.DEFAULT_URL
             }
-            Label { text: "Benutzername"; color: root.contentForeground }
+            Label { text: "Username"; color: root.contentForeground }
             TextField { id: userField; Layout.fillWidth: true; text: root.svc ? root.svc.username : "" }
-            Label { text: "Passwort"; color: root.contentForeground }
+            Label { text: "Password"; color: root.contentForeground }
             TextField { id: passField; Layout.fillWidth: true; echoMode: TextInput.Password }
             Button {
               text: "Login"
@@ -223,7 +223,7 @@ Panel {
             ColumnLayout {
               Layout.preferredWidth: Style.space(200)
 
-              Label { text: "Bibliotheken"; color: root.contentForeground }
+              Label { text: "Libraries"; color: root.contentForeground }
               ListView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -237,17 +237,17 @@ Panel {
                   }
                 }
               }
-              Button { text: "Aktualisieren"; onClicked: if (root.svc) root.svc.getLibraries() }
+              Button { text: "Refresh"; onClicked: if (root.svc) root.svc.getLibraries() }
             }
 
             ColumnLayout {
               Layout.preferredWidth: Style.space(260)
 
-              Label { text: "Serien"; color: root.contentForeground }
+              Label { text: "Series"; color: root.contentForeground }
               TextField {
                 id: seriesSearch
                 Layout.fillWidth: true
-                placeholderText: "Serie suchen…"
+                placeholderText: "Search series…"
                 onTextChanged: root.applySeriesFilter()
               }
               ListView {
@@ -265,7 +265,7 @@ Panel {
             ColumnLayout {
               Layout.fillWidth: true
 
-              Label { text: "Bücher"; color: root.contentForeground }
+              Label { text: "Books"; color: root.contentForeground }
               ListView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -286,7 +286,7 @@ Panel {
             RowLayout {
               Layout.fillWidth: true
 
-              Button { text: "← Bibliothek"; onClicked: stack.currentIndex = 1 }
+              Button { text: "← Library"; onClicked: stack.currentIndex = 1 }
               Label {
                 id: bookTitle
                 color: root.contentForeground
@@ -295,7 +295,7 @@ Panel {
               }
               Button {
                 visible: root.readerOpen && root.cbzImages.length > 1
-                text: "← Vorige"
+                text: "← Previous"
                 onClicked: root.cbzIndex = Math.max(0, root.cbzIndex - 1)
               }
               Label {
@@ -305,7 +305,7 @@ Panel {
               }
               Button {
                 visible: root.readerOpen && root.cbzImages.length > 1
-                text: "Nächste →"
+                text: "Next →"
                 onClicked: root.cbzIndex = Math.min(root.cbzImages.length - 1, root.cbzIndex + 1)
               }
             }

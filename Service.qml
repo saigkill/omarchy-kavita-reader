@@ -57,7 +57,7 @@ Item {
     if (code !== "401") return false
     if (svc.refreshToken === "" || svc.refreshTried) {
       svc.clearSession()
-      svc.errorOccurred("Sitzung abgelaufen, bitte neu anmelden")
+      svc.errorOccurred("Session expired, please log in again")
       return true
     }
     svc.refreshTried = true
@@ -144,7 +144,7 @@ Item {
         var file = files.length > 0 ? files[0] : null
         books.push({
           id: chapter.id,
-          name: chapter.title || chapter.titleName || ("Band " + chapter.number),
+          name: chapter.title || chapter.titleName || ("Volume " + chapter.number),
           format: svc.bookFormat(file),
           extension: file ? String(file.extension || "") : "",
           volumeId: chapter.volumeId,
@@ -237,10 +237,10 @@ Item {
             svc.token = res.token
             svc.saveSession()
           } else {
-            svc.errorOccurred("Login fehlgeschlagen")
+            svc.errorOccurred("Login failed")
           }
         } catch (e) {
-          svc.errorOccurred("Login-Fehler: " + e)
+          svc.errorOccurred("Login error: " + e)
         }
       }
     }
@@ -256,7 +256,7 @@ Item {
         try {
           svc.librariesLoaded(JSON.parse(r.body))
         } catch (e) {
-          svc.errorOccurred("Bibliotheken laden fehlgeschlagen")
+          svc.errorOccurred("Failed to load libraries")
         }
       }
     }
@@ -328,9 +328,9 @@ Item {
         } catch (e) {}
         if (r.code === "400" || r.code === "401") {
           svc.clearSession()
-          svc.errorOccurred("Sitzung abgelaufen, bitte neu anmelden")
+          svc.errorOccurred("Session expired, please log in again")
         } else {
-          svc.errorOccurred("Sitzung konnte nicht erneuert werden")
+          svc.errorOccurred("Session could not be renewed")
         }
       }
     }
@@ -344,7 +344,7 @@ Item {
         try {
           svc.seriesLoaded(JSON.parse(text))
         } catch (e) {
-          svc.errorOccurred("Serien laden fehlgeschlagen")
+          svc.errorOccurred("Failed to load series")
         }
       }
     }
@@ -358,7 +358,7 @@ Item {
         try {
           svc.booksLoaded(svc.flattenBooks(JSON.parse(text)))
         } catch (e) {
-          svc.errorOccurred("Bücher laden fehlgeschlagen")
+          svc.errorOccurred("Failed to load books")
         }
       }
     }
@@ -369,7 +369,7 @@ Item {
     property string destPath: ""
     onExited: function(exitCode) {
       if (exitCode === 0 && destPath.length > 0) svc.bookDownloaded(destPath)
-      else if (exitCode !== 0) svc.errorOccurred("Download fehlgeschlagen")
+      else if (exitCode !== 0) svc.errorOccurred("Download failed")
     }
   }
 
@@ -380,7 +380,7 @@ Item {
       onStreamFinished: {
         var out = String(text || "").trim()
         if (out.length > 0) svc.epubConverted(out)
-        else svc.errorOccurred("EPUB-Konvertierung fehlgeschlagen (ebook-convert oder pandoc+LaTeX nötig)")
+        else svc.errorOccurred("EPUB conversion failed (ebook-convert or pandoc+LaTeX required)")
       }
     }
   }

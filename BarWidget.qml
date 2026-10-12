@@ -18,8 +18,8 @@ BarWidget {
 
   readonly property bool connected: svc ? svc.loggedIn : false
   readonly property string tooltipText: connected
-    ? "Kavita: " + (svc.username || "verbunden")
-    : "Kavita Reader: nicht verbunden"
+    ? "Kavita: " + (svc.username || "connected")
+    : "Kavita Reader: not connected"
 
   readonly property color stateColor: connected
     ? (bar ? bar.barForeground : Color.foreground)
