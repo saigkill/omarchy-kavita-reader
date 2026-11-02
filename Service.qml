@@ -36,7 +36,10 @@ Item {
   signal cbzUnpacked(string dir, var images)
   signal epubConverted(string pdfPath)
 
-  Component.onCompleted: loadReq.running = true
+  Component.onCompleted: {
+    loadReq.running = true
+    cacheInit.running = true
+  }
 
   function saveSession() {
     saveReq.payload = JSON.stringify({
@@ -290,6 +293,12 @@ Item {
       stdinEnabled = false
     }
     onRunningChanged: if (!running) stdinEnabled = true
+  }
+
+  // Locks down a cache left by an older version (0755/0644) at startup.
+  Process {
+    id: cacheInit
+    command: ["bash", "-c", Safety.startupScript, "bash", svc.cacheDir]
   }
 
   Process {

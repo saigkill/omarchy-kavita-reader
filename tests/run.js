@@ -114,6 +114,52 @@ test("existing world-readable cache data is restricted", () => {
   assert.strictEqual(mode(sb.cache + "/old_unpack/sub"), "700")
 })
 
+function oldCache(sb) {
+  fs.mkdirSync(sb.cache + "/old_unpack/sub", { recursive: true })
+  fs.writeFileSync(sb.cache + "/old.pdf", "x"); fs.writeFileSync(sb.cache + "/old_unpack/sub/1.png", "x")
+  fs.chmodSync(sb.cache, 0o755); fs.chmodSync(sb.cache + "/old.pdf", 0o644)
+  fs.chmodSync(sb.cache + "/old_unpack/sub/1.png", 0o644); fs.chmodSync(sb.cache + "/old_unpack/sub", 0o755)
+}
+
+test("startup alone (no download/convert/unpack) restricts an old cache", () => {
+  const sb = sandbox()
+  oldCache(sb)
+  const r = run(sb, S.startupScript, [sb.cache])
+  assert.strictEqual(r.status, 0, r.stderr)
+  assert.strictEqual(mode(sb.cache), "700")
+  assert.strictEqual(mode(sb.cache + "/old.pdf"), "600")
+  assert.strictEqual(mode(sb.cache + "/old_unpack/sub"), "700")
+  assert.strictEqual(mode(sb.cache + "/old_unpack/sub/1.png"), "600")
+})
+
+test("startup does not create a missing cache", () => {
+  const sb = sandbox()
+  assert.strictEqual(run(sb, S.startupScript, [sb.cache]).status, 0)
+  assert(!fs.existsSync(sb.cache))
+})
+
+test("startup never follows symlinks (cache dir or entries)", () => {
+  const sb = sandbox()
+  const outside = path.join(sb.root, "outside"); fs.mkdirSync(outside)
+  fs.writeFileSync(outside + "/secret", "x"); fs.chmodSync(outside + "/secret", 0o644); fs.chmodSync(outside, 0o755)
+  // symlinked entry inside a real cache
+  fs.mkdirSync(sb.cache, { recursive: true })
+  fs.symlinkSync(outside + "/secret", sb.cache + "/link"); fs.symlinkSync(outside, sb.cache + "/dirlink")
+  assert.strictEqual(run(sb, S.startupScript, [sb.cache]).status, 0)
+  assert.strictEqual(mode(outside + "/secret"), "644"); assert.strictEqual(mode(outside), "755")
+  // symlinked cache dir itself
+  const sb2 = sandbox(); fs.mkdirSync(path.dirname(sb2.cache), { recursive: true })
+  fs.symlinkSync(outside, sb2.cache)
+  assert.notStrictEqual(run(sb2, S.startupScript, [sb2.cache]).status, 0)
+  assert.notStrictEqual(run(sb2, S.downloadScript, [sb2.cache, sb2.cache + "/1_a", "http://x"], "").status, 0)
+  assert.strictEqual(mode(outside + "/secret"), "644"); assert.strictEqual(mode(outside), "755")
+})
+
+test("Service.qml runs the startup restriction on initialization", () => {
+  assert(/Component\.onCompleted:\s*\{[^}]*cacheInit\.running = true/.test(svcSrc))
+  assert(/id: cacheInit[\s\S]*?Safety\.startupScript/.test(svcSrc))
+})
+
 test("unzip extracts privately under umask 022", () => {
   const sb = sandbox()
   const src = path.join(sb.root, "src"); fs.mkdirSync(src)

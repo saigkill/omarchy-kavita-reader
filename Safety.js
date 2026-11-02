@@ -31,10 +31,20 @@ function authConfig(token) {
   return 'header = "Authorization: Bearer ' + t.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"\n'
 }
 
+// Restricts an existing cache to its owner. A symlinked or foreign-owned cache
+// dir is refused (chmod would follow the link); inside it, symlinks are never
+// chmod'ed (find -type l is skipped, -xdev stays on one filesystem) and only
+// the owner's own files are touched. "$1" is always the cache directory.
+var RESTRICT = 'if [ -L "$1" ] || [ ! -O "$1" ]; then exit 1; fi; '
+  + 'chmod 700 "$1" && find "$1" -xdev -user "$(id -u)" ! -type l -exec chmod go-rwx {} + || exit 1; '
+
+// Runs once at service startup, so data cached by an older version is locked
+// down on upgrade without waiting for the next download. Never creates the dir.
+var startupScript = 'umask 077; [ -d "$1" ] || exit 0; ' + RESTRICT
+
 // Every script that writes into the cache starts with this: private umask,
 // a 0700 cache dir and any pre-existing content restricted to the owner.
-// "$1" is always the cache directory.
-var PREPARE = 'umask 077; mkdir -p -m 700 "$1" && chmod -R go-rwx "$1" || exit 1; '
+var PREPARE = 'umask 077; if [ -L "$1" ]; then exit 1; fi; mkdir -p -m 700 "$1" || exit 1; ' + RESTRICT
 
 // $1 cache dir, $2 destination file, $3 URL. The header arrives on stdin.
 var downloadScript = PREPARE + 'rm -f "$2" && curl -sL -K - -o "$2" "$3"'
@@ -65,7 +75,7 @@ var unrarScript = PREPARE + 'rm -rf "$2" && mkdir -p "$2" '
 if (typeof module !== "undefined") {
   module.exports = {
     isId: isId, inCache: inCache, safeName: safeName, authConfig: authConfig,
-    PREPARE: PREPARE, downloadScript: downloadScript, epubScript: epubScript,
+    PREPARE: PREPARE, startupScript: startupScript, downloadScript: downloadScript, epubScript: epubScript,
     unzipScript: unzipScript, unrarScript: unrarScript
   }
 }
