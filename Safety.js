@@ -1,0 +1,71 @@
+.pragma library
+
+// Trust boundary helpers for Service.qml. Everything the Kavita server sends
+// (IDs, titles) is untrusted before it touches argv or the local file system.
+// Kept free of QML types so tests/run.js can exercise it with plain node.
+
+// Kavita IDs are positive integers. Anything else (path segments, query
+// fragments, floats, exponents) is rejected rather than sanitized.
+function isId(v) {
+  if (typeof v !== "number" && typeof v !== "string") return false
+  return /^[1-9][0-9]{0,17}$/.test(String(v))
+}
+
+// True only for a path strictly below cacheDir without any ".." segment.
+function inCache(path, cacheDir) {
+  var p = String(path || "")
+  var c = String(cacheDir || "").replace(/\/+$/, "")
+  if (c === "" || p.indexOf(c + "/") !== 0) return false
+  if (/[\n\r\0]/.test(p)) return false
+  return p.slice(c.length + 1).split("/").indexOf("..") === -1
+}
+
+function safeName(name) {
+  return String(name || "").replace(/[^a-zA-Z0-9._-]/g, "_")
+}
+
+// curl config (read via `-K -` from stdin) holding the Authorization header,
+// so the token never appears in argv or the environment of any process.
+function authConfig(token) {
+  var t = String(token || "").replace(/[\u0000-\u001f\u007f]/g, "")
+  return 'header = "Authorization: Bearer ' + t.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"\n'
+}
+
+// Every script that writes into the cache starts with this: private umask,
+// a 0700 cache dir and any pre-existing content restricted to the owner.
+// "$1" is always the cache directory.
+var PREPARE = 'umask 077; mkdir -p -m 700 "$1" && chmod -R go-rwx "$1" || exit 1; '
+
+// $1 cache dir, $2 destination file, $3 URL. The header arrives on stdin.
+var downloadScript = PREPARE + 'rm -f "$2" && curl -sL -K - -o "$2" "$3"'
+
+// $1 cache dir, $2 source EPUB.
+var epubScript = PREPARE
+  + 'export PATH="$HOME/.local/bin:$PATH"; '
+  + 'src="$2"; out="${src%.*}.pdf"; rm -f "$out"; '
+  + 'if command -v ebook-convert >/dev/null 2>&1; then '
+  + '  ebook-convert "$src" "$out" >/dev/null 2>&1; '
+  + 'elif command -v pandoc >/dev/null 2>&1; then '
+  + '  pandoc "$src" -o "$out" >/dev/null 2>&1 '
+  + '    || pandoc "$src" -o "$out" --pdf-engine=xelatex >/dev/null 2>&1; '
+  + 'fi; '
+  + 'if [ -s "$out" ]; then printf "%s" "$out"; else exit 1; fi'
+
+// Archives carry their own modes (often 644); tighten them after extraction.
+var IMAGES = 'chmod -R go-rwx "$2" && find "$2" -type f \\( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" '
+  + '-o -iname "*.webp" -o -iname "*.gif" \\) | sort'
+
+// $1 cache dir, $2 unpack dir, $3 archive.
+var unzipScript = PREPARE + 'rm -rf "$2" && mkdir -p "$2" && unzip -q "$3" -d "$2" && ' + IMAGES
+
+var unrarScript = PREPARE + 'rm -rf "$2" && mkdir -p "$2" '
+  + '&& (unrar x -inul -y "$3" "$2/" 2>/dev/null || bsdtar -xf "$3" -C "$2" 2>/dev/null '
+  + '|| 7z e -o"$2" "$3" >/dev/null 2>&1) && ' + IMAGES
+
+if (typeof module !== "undefined") {
+  module.exports = {
+    isId: isId, inCache: inCache, safeName: safeName, authConfig: authConfig,
+    PREPARE: PREPARE, downloadScript: downloadScript, epubScript: epubScript,
+    unzipScript: unzipScript, unrarScript: unrarScript
+  }
+}

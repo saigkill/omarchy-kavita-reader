@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "Safety.js" as Safety
 
 // Headless service for the Kavita reader. Owns the session (URL, username,
 // token) and every curl call to the Kavita REST API. The shell creates one
@@ -17,15 +18,15 @@ Item {
 
   readonly property bool loggedIn: token.length > 0
 
-  // The token never enters argv: every authenticated curl reads its
-  // Authorization header from the environment instead of the world-readable
-  // process arguments in /proc.
+  // The token never enters argv or the environment: every authenticated curl
+  // reads its Authorization header as a config (`-K -`) from stdin, so neither
+  // curl nor any wrapper shell exposes it in /proc. The cache is private
+  // (0700, umask 077) and only receives server data under validated numeric IDs.
   readonly property string cacheDir: Quickshell.env("HOME") + "/.cache/quickshell/kavita-reader"
   // The session survives a reboot: URL, user and tokens (never the password)
   // live in a private file outside the plugin directory.
   readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/omarchy-kavita-reader"
   readonly property string sessionFile: stateDir + "/session.json"
-  readonly property var authEnv: ({ AUTH: "Authorization: Bearer " + svc.token })
 
   signal errorOccurred(string message)
   signal librariesLoaded(var list)
@@ -87,9 +88,9 @@ Item {
 
   function getLibraries() {
     if (!svc.loggedIn) return
-    libsReq.environment = svc.authEnv
-    libsReq.command = ["bash", "-c", 'curl -s -w "\\n%{http_code}" -H "$AUTH" "$1"',
-      "bash", svc.kavitaUrl + "/api/Library/libraries"]
+    libsReq.payload = Safety.authConfig(svc.token)
+    libsReq.command = ["curl", "-s", "-w", "\\n%{http_code}", "-K", "-",
+      svc.kavitaUrl + "/api/Library/libraries"]
     libsReq.running = true
   }
 
@@ -103,11 +104,10 @@ Item {
   }
 
   function getSeries(libraryId) {
-    if (!svc.loggedIn) return
-    seriesReq.environment = svc.authEnv
-    seriesReq.command = ["bash", "-c",
-      'curl -s -H "$AUTH" -H "Content-Type: application/json" -X POST -d "$1" "$2"',
-      "bash", svc.libraryFilter(libraryId),
+    if (!svc.loggedIn || !Safety.isId(libraryId)) return
+    seriesReq.payload = Safety.authConfig(svc.token)
+    seriesReq.command = ["curl", "-s", "-K", "-", "-H", "Content-Type: application/json",
+      "-X", "POST", "-d", svc.libraryFilter(libraryId),
       svc.kavitaUrl + "/api/Series/v2?pageNumber=1&pageSize=10000"]
     seriesReq.running = true
   }
@@ -115,10 +115,10 @@ Item {
   // A series' readable units are its chapters (one file each), fetched via the
   // volumes endpoint and flattened for the panel.
   function getBooks(seriesId) {
-    if (!svc.loggedIn) return
-    booksReq.environment = svc.authEnv
-    booksReq.command = ["bash", "-c", 'curl -s -H "$AUTH" "$1"',
-      "bash", svc.kavitaUrl + "/api/Series/volumes?seriesId=" + seriesId]
+    if (!svc.loggedIn || !Safety.isId(seriesId)) return
+    booksReq.payload = Safety.authConfig(svc.token)
+    booksReq.command = ["curl", "-s", "-K", "-",
+      svc.kavitaUrl + "/api/Series/volumes?seriesId=" + seriesId]
     booksReq.running = true
   }
 
@@ -142,6 +142,7 @@ Item {
         var chapter = chapters[j]
         var files = chapter.files || []
         var file = files.length > 0 ? files[0] : null
+        if (!Safety.isId(chapter.id)) continue
         books.push({
           id: chapter.id,
           name: chapter.title || chapter.titleName || ("Volume " + chapter.number),
@@ -157,11 +158,18 @@ Item {
 
   function downloadBook(bookId, fileName) {
     if (!svc.loggedIn) return ""
-    var safe = String(fileName || "").replace(/[^a-zA-Z0-9._-]/g, "_")
-    var dest = svc.cacheDir + "/" + bookId + "_" + safe
+    if (!Safety.isId(bookId)) {
+      svc.errorOccurred("Invalid book id")
+      return ""
+    }
+    var dest = svc.cacheDir + "/" + bookId + "_" + Safety.safeName(fileName)
+    if (!Safety.inCache(dest, svc.cacheDir)) {
+      svc.errorOccurred("Invalid download path")
+      return ""
+    }
     dlReq.destPath = dest
-    dlReq.environment = svc.authEnv
-    dlReq.command = ["bash", "-c", 'mkdir -p "$1" && curl -sL -H "$AUTH" -o "$2" "$3"',
+    dlReq.payload = Safety.authConfig(svc.token)
+    dlReq.command = ["bash", "-c", Safety.downloadScript,
       "bash", svc.cacheDir, dest, svc.kavitaUrl + "/api/Download/chapter?chapterId=" + bookId]
     dlReq.running = true
     return dest
@@ -171,44 +179,24 @@ Item {
   // in the panel's PDF viewer. ebook-convert (calibre) is preferred when
   // installed, otherwise pandoc with a LaTeX engine is used as fallback.
   function convertEpub(path) {
-    if (!path) return
-    epubConv.command = ["bash", "-c",
-      'export PATH="$HOME/.local/bin:$PATH"; '
-      + 'src="$1"; out="${src%.*}.pdf"; rm -f "$out"; '
-      + 'if command -v ebook-convert >/dev/null 2>&1; then '
-      + '  ebook-convert "$src" "$out" >/dev/null 2>&1; '
-      + 'elif command -v pandoc >/dev/null 2>&1; then '
-      + '  pandoc "$src" -o "$out" >/dev/null 2>&1 '
-      + '    || pandoc "$src" -o "$out" --pdf-engine=xelatex >/dev/null 2>&1; '
-      + 'fi; '
-      + 'if [ -s "$out" ]; then printf "%s" "$out"; else exit 1; fi',
-      "bash", path]
+    if (!path || !Safety.inCache(path, svc.cacheDir)) return
+    epubConv.command = ["bash", "-c", Safety.epubScript, "bash", svc.cacheDir, path]
     epubConv.running = true
   }
 
   function unpackCbz(path) {
-    if (!path) return
+    if (!path || !Safety.inCache(path, svc.cacheDir)) return
     var dir = path + "_unpack"
     unpackProc.dir = dir
-    unpackProc.command = ["bash", "-c",
-      'rm -rf "$1" && mkdir -p "$1" && unzip -q "$2" -d "$1" '
-      + '&& find "$1" -type f \\( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" '
-      + '-o -iname "*.webp" -o -iname "*.gif" \\) | sort',
-      "bash", dir, path]
+    unpackProc.command = ["bash", "-c", Safety.unzipScript, "bash", svc.cacheDir, dir, path]
     unpackProc.running = true
   }
 
   function unpackCbr(path) {
-    if (!path) return
+    if (!path || !Safety.inCache(path, svc.cacheDir)) return
     var dir = path + "_unpack"
     cbrProc.dir = dir
-    cbrProc.command = ["bash", "-c",
-      'rm -rf "$1" && mkdir -p "$1" '
-      + '&& (unrar x -inul -y "$2" "$1/" 2>/dev/null || bsdtar -xf "$2" -C "$1" 2>/dev/null '
-      + '|| 7z e -o"$1" "$2" >/dev/null 2>&1) '
-      + '&& find "$1" -type f \\( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" '
-      + '-o -iname "*.webp" -o -iname "*.gif" \\) | sort',
-      "bash", dir, path]
+    cbrProc.command = ["bash", "-c", Safety.unrarScript, "bash", svc.cacheDir, dir, path]
     cbrProc.running = true
   }
 
@@ -248,6 +236,13 @@ Item {
 
   Process {
     id: libsReq
+    property string payload: ""
+    stdinEnabled: true
+    onStarted: {
+      write(payload)
+      stdinEnabled = false
+    }
+    onRunningChanged: if (!running) stdinEnabled = true
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -338,6 +333,13 @@ Item {
 
   Process {
     id: seriesReq
+    property string payload: ""
+    stdinEnabled: true
+    onStarted: {
+      write(payload)
+      stdinEnabled = false
+    }
+    onRunningChanged: if (!running) stdinEnabled = true
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -352,6 +354,13 @@ Item {
 
   Process {
     id: booksReq
+    property string payload: ""
+    stdinEnabled: true
+    onStarted: {
+      write(payload)
+      stdinEnabled = false
+    }
+    onRunningChanged: if (!running) stdinEnabled = true
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -367,6 +376,13 @@ Item {
   Process {
     id: dlReq
     property string destPath: ""
+    property string payload: ""
+    stdinEnabled: true
+    onStarted: {
+      write(payload)
+      stdinEnabled = false
+    }
+    onRunningChanged: if (!running) stdinEnabled = true
     onExited: function(exitCode) {
       if (exitCode === 0 && destPath.length > 0) svc.bookDownloaded(destPath)
       else if (exitCode !== 0) svc.errorOccurred("Download failed")
