@@ -11,6 +11,21 @@ function isId(v) {
   return /^[1-9][0-9]{0,17}$/.test(String(v))
 }
 
+// Server JSON is untrusted: a tiny response such as {"length":1e100} must not
+// reach the synchronous model loops in the panel. Accept real arrays only, cap
+// their size and keep plain objects.
+var MAX_LIST_ITEMS = 5000
+function asList(value) {
+  if (!Array.isArray(value)) return []
+  var out = []
+  var n = Math.min(value.length, MAX_LIST_ITEMS)
+  for (var i = 0; i < n; i++) {
+    var item = value[i]
+    if (item !== null && typeof item === "object" && !Array.isArray(item)) out.push(item)
+  }
+  return out
+}
+
 // True only for a path strictly below cacheDir without any ".." segment.
 function inCache(path, cacheDir) {
   var p = String(path || "")
@@ -89,7 +104,7 @@ var unrarScript = PREPARE + 'rm -rf "$2" && mkdir -p "$2" '
 
 if (typeof module !== "undefined") {
   module.exports = {
-    isId: isId, inCache: inCache, safeName: safeName, authConfig: authConfig,
+    isId: isId, asList: asList, MAX_LIST_ITEMS: MAX_LIST_ITEMS, inCache: inCache, safeName: safeName, authConfig: authConfig,
     MAX_API_RESPONSE_BYTES: MAX_API_RESPONSE_BYTES, cappedCurlScript: cappedCurlScript,
     PREPARE: PREPARE, startupScript: startupScript, downloadScript: downloadScript, epubScript: epubScript,
     unzipScript: unzipScript, unrarScript: unrarScript

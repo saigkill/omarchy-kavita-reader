@@ -52,7 +52,8 @@ Panel {
 
   function fill(model, list) {
     model.clear()
-    for (var i = 0; i < (list ? list.length : 0); i++) model.append(list[i])
+    if (!Array.isArray(list)) return
+    for (var i = 0; i < list.length; i++) model.append(list[i])
   }
 
   // The series list is filtered in the panel: every series of the selected

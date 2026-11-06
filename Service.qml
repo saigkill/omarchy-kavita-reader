@@ -143,12 +143,12 @@ Item {
 
   function flattenBooks(volumes) {
     var books = []
-    if (!volumes) return books
+    volumes = Safety.asList(volumes)
     for (var i = 0; i < volumes.length; i++) {
-      var chapters = volumes[i].chapters || []
+      var chapters = Safety.asList(volumes[i].chapters)
       for (var j = 0; j < chapters.length; j++) {
         var chapter = chapters[j]
-        var files = chapter.files || []
+        var files = Safety.asList(chapter.files)
         var file = files.length > 0 ? files[0] : null
         if (!Safety.isId(chapter.id)) continue
         books.push({
@@ -257,7 +257,7 @@ Item {
         var r = svc.splitStatus(text)
         if (svc.handleHttpStatus(r.code)) return
         try {
-          svc.librariesLoaded(JSON.parse(r.body))
+          svc.librariesLoaded(Safety.asList(JSON.parse(r.body)))
         } catch (e) {
           svc.errorOccurred("Failed to load libraries")
         }
@@ -358,7 +358,7 @@ Item {
       waitForEnd: true
       onStreamFinished: {
         try {
-          svc.seriesLoaded(JSON.parse(text))
+          svc.seriesLoaded(Safety.asList(JSON.parse(text)))
         } catch (e) {
           svc.errorOccurred("Failed to load series")
         }

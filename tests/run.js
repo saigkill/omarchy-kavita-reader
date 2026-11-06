@@ -175,6 +175,15 @@ test("unzip extracts privately under umask 022", () => {
   assert.strictEqual(mode(dir + "/1.png"), "600")
 })
 
+test("asList rejects non-arrays and caps hostile lists", () => {
+  for (const v of [{ length: 1e100 }, "abc", 5, null, undefined, {}])
+    assert.deepStrictEqual(S.asList(v), [], JSON.stringify(v))
+  assert.deepStrictEqual(S.asList([{ id: 1 }, null, 3, "x", [1], { id: 2 }]), [{ id: 1 }, { id: 2 }])
+  const big = new Array(S.MAX_LIST_ITEMS * 4).fill({ id: 1 })
+  assert.strictEqual(S.asList(big).length, S.MAX_LIST_ITEMS)
+  assert.strictEqual(S.asList(JSON.parse('{"length":1e100}')).length, 0)
+})
+
 test("crafted chapter id never reaches a path outside the cache", () => {
   const evil = "../../../Documents/"
   assert(!S.isId(evil))
