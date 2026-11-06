@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Pdf
+import Quickshell
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
@@ -24,6 +25,20 @@ Panel {
   property var cbzImages: []
   property int cbzIndex: 0
   property var allSeries: []
+
+  // Detached: the content leaves the bar popup and lives in a regular
+  // window, which Hyprland tiles like any other client.
+  property bool detached: false
+
+  function detach() {
+    root.detached = true
+    root.close()
+  }
+
+  function dock() {
+    root.detached = false
+    root.open()
+  }
 
   readonly property color contentForeground: bar ? bar.barForeground : Color.foreground
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
@@ -142,6 +157,28 @@ Panel {
   ListModel { id: seriesModel }
   ListModel { id: booksModel }
 
+  FloatingWindow {
+    id: win
+    title: "Kavita Reader"
+    visible: root.detached
+    color: Color.popups.background
+    implicitWidth: Style.space(1000)
+    implicitHeight: Style.space(700)
+    minimumSize: Qt.size(Style.space(480), Style.space(360))
+
+    // Closed by the window manager: fall back to the (closed) bar popup.
+    onVisibleChanged: if (!visible && root.detached) root.detached = false
+
+    Item {
+      id: winHost
+      anchors.fill: parent
+      anchors.margins: Style.space(16)
+      focus: true
+      Keys.onLeftPressed: if (root.readerOpen) root.cbzIndex = Math.max(0, root.cbzIndex - 1)
+      Keys.onRightPressed: if (root.readerOpen) root.cbzIndex = Math.min(root.cbzImages.length - 1, root.cbzIndex + 1)
+    }
+  }
+
   KeyboardPanel {
     id: panel
     anchorItem: root.anchorItem
@@ -165,6 +202,10 @@ Panel {
       }
 
       ColumnLayout {
+        id: content
+        // Re-parented live between the bar popup and the detached window, so
+        // login, library and reader state survive the switch.
+        parent: root.detached ? winHost : keyCatcher
         anchors.fill: parent
         spacing: Style.space(8)
 
@@ -179,8 +220,12 @@ Panel {
           }
           Item { Layout.fillWidth: true }
           Button {
+            text: root.detached ? "Dock" : "Detach"
+            onClicked: root.detached ? root.dock() : root.detach()
+          }
+          Button {
             text: "Close"
-            onClicked: root.close()
+            onClicked: root.detached ? root.detached = false : root.close()
           }
         }
 

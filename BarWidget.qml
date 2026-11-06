@@ -29,9 +29,12 @@ BarWidget {
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
   readonly property bool popoutSwitchClosing: panelLoader.item ? panelLoader.item.popoutSwitchClosing === true : false
 
-  function open() { if (panelLoader.item) panelLoader.item.open() }
-  function close() { if (panelLoader.item) panelLoader.item.close() }
-  function toggle() { if (panelLoader.item) panelLoader.item.toggle() }
+  // While detached the popup has no content; the bar icon docks it back.
+  readonly property bool detached: panelLoader.item ? panelLoader.item.detached === true : false
+
+  function open() { if (panelLoader.item) { if (detached) panelLoader.item.dock(); else panelLoader.item.open() } }
+  function close() { if (panelLoader.item) { if (detached) panelLoader.item.detached = false; else panelLoader.item.close() } }
+  function toggle() { if (panelLoader.item) { if (detached) panelLoader.item.dock(); else panelLoader.item.toggle() } }
   function closeForPopoutSwitch() { if (panelLoader.item) panelLoader.item.closeForPopoutSwitch() }
 
   function injectPanel() {

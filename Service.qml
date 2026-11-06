@@ -66,7 +66,8 @@ Item {
     }
     svc.refreshTried = true
     refreshReq.payload = JSON.stringify({ token: svc.token, refreshToken: svc.refreshToken })
-    refreshReq.command = ["curl", "-s", "-w", "\n%{http_code}", "-X", "POST",
+    refreshReq.command = ["bash", "-c", Safety.cappedCurlScript, "bash",
+      "-s", "-w", "\n%{http_code}", "-X", "POST",
       svc.kavitaUrl + "/api/Account/refresh-token",
       "-H", "Content-Type: application/json", "-d", "@-"]
     refreshReq.running = true
@@ -84,7 +85,8 @@ Item {
     svc.kavitaUrl = String(url || "").replace(/\/+$/, "")
     svc.username = user
     loginReq.payload = JSON.stringify({ username: user, password: password })
-    loginReq.command = ["curl", "-s", "-X", "POST", svc.kavitaUrl + "/api/Account/login",
+    loginReq.command = ["bash", "-c", Safety.cappedCurlScript, "bash",
+      "-s", "-X", "POST", svc.kavitaUrl + "/api/Account/login",
       "-H", "Content-Type: application/json", "-d", "@-"]
     loginReq.running = true
   }
@@ -92,7 +94,8 @@ Item {
   function getLibraries() {
     if (!svc.loggedIn) return
     libsReq.payload = Safety.authConfig(svc.token)
-    libsReq.command = ["curl", "-s", "-w", "\\n%{http_code}", "-K", "-",
+    libsReq.command = ["bash", "-c", Safety.cappedCurlScript, "bash",
+      "-s", "-w", "\\n%{http_code}", "-K", "-",
       svc.kavitaUrl + "/api/Library/libraries"]
     libsReq.running = true
   }
@@ -109,7 +112,8 @@ Item {
   function getSeries(libraryId) {
     if (!svc.loggedIn || !Safety.isId(libraryId)) return
     seriesReq.payload = Safety.authConfig(svc.token)
-    seriesReq.command = ["curl", "-s", "-K", "-", "-H", "Content-Type: application/json",
+    seriesReq.command = ["bash", "-c", Safety.cappedCurlScript, "bash",
+      "-s", "-K", "-", "-H", "Content-Type: application/json",
       "-X", "POST", "-d", svc.libraryFilter(libraryId),
       svc.kavitaUrl + "/api/Series/v2?pageNumber=1&pageSize=10000"]
     seriesReq.running = true
@@ -120,7 +124,8 @@ Item {
   function getBooks(seriesId) {
     if (!svc.loggedIn || !Safety.isId(seriesId)) return
     booksReq.payload = Safety.authConfig(svc.token)
-    booksReq.command = ["curl", "-s", "-K", "-",
+    booksReq.command = ["bash", "-c", Safety.cappedCurlScript, "bash",
+      "-s", "-K", "-",
       svc.kavitaUrl + "/api/Series/volumes?seriesId=" + seriesId]
     booksReq.running = true
   }

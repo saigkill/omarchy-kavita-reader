@@ -31,6 +31,21 @@ function authConfig(token) {
   return 'header = "Authorization: Bearer ' + t.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"\n'
 }
 
+// Memory budget for API responses that are buffered whole and JSON-parsed in
+// QML (login, libraries, series, books, refresh-token). A hostile configured
+// server, or anyone who can tamper with a plain-HTTP response, could otherwise
+// keep the connection open and stream an unbounded body, growing the shared
+// shell's memory without limit before JSON.parse ever runs.
+var MAX_API_RESPONSE_BYTES = 16 * 1024 * 1024
+
+// Runs curl with the given arguments and caps its combined stdout (JSON body
+// plus, where used, the trailing "-w" status line) at MAX_API_RESPONSE_BYTES.
+// `head -c` closes the pipe once the budget is hit, which stops curl with
+// SIGPIPE instead of letting it keep buffering. A response cut off this way
+// fails JSON.parse and is handled like any other malformed response. Stdin
+// (an auth config or POST body) passes through to curl unchanged.
+var cappedCurlScript = 'curl "$@" | head -c ' + MAX_API_RESPONSE_BYTES
+
 // Restricts an existing cache to its owner. A symlinked or foreign-owned cache
 // dir is refused (chmod would follow the link); inside it, symlinks are never
 // chmod'ed (find -type l is skipped, -xdev stays on one filesystem) and only
@@ -75,6 +90,7 @@ var unrarScript = PREPARE + 'rm -rf "$2" && mkdir -p "$2" '
 if (typeof module !== "undefined") {
   module.exports = {
     isId: isId, inCache: inCache, safeName: safeName, authConfig: authConfig,
+    MAX_API_RESPONSE_BYTES: MAX_API_RESPONSE_BYTES, cappedCurlScript: cappedCurlScript,
     PREPARE: PREPARE, startupScript: startupScript, downloadScript: downloadScript, epubScript: epubScript,
     unzipScript: unzipScript, unrarScript: unrarScript
   }
