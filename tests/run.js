@@ -175,6 +175,18 @@ test("unzip extracts privately under umask 022", () => {
   assert.strictEqual(mode(dir + "/1.png"), "600")
 })
 
+test("flattenBooks enforces an overall budget and clips titles", () => {
+  const fmt = () => "PDF"
+  // 100 volumes x 100 chapters = 10000 valid chapters, twice the budget.
+  const chapters = Array.from({ length: 100 }, (_, k) => ({ id: k + 1, title: "t" }))
+  const volumes = Array.from({ length: 100 }, () => ({ chapters }))
+  assert.strictEqual(S.flattenBooks(volumes, fmt).length, S.MAX_TOTAL_BOOKS)
+  const huge = S.flattenBooks([{ chapters: [{ id: 1, title: "x".repeat(1e6), files: [{ extension: ".pdf".repeat(100) }] }] }], fmt)[0]
+  assert(huge.name.length <= S.MAX_TITLE_CHARS && huge.extension.length <= 16)
+  assert.deepStrictEqual(S.flattenBooks([{ chapters: [{ id: "../x" }, { id: 5 }] }], fmt).map(b => b.id), [5])
+  assert.deepStrictEqual(S.flattenBooks("nope", fmt), [])
+})
+
 test("asList rejects non-arrays and caps hostile lists", () => {
   for (const v of [{ length: 1e100 }, "abc", 5, null, undefined, {}])
     assert.deepStrictEqual(S.asList(v), [], JSON.stringify(v))

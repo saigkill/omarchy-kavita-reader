@@ -26,6 +26,42 @@ function asList(value) {
   return out
 }
 
+// asList caps each array, but nested arrays (volumes -> chapters) multiply:
+// 5000 x 5000 items fit into a few MB of JSON. One overall budget for the
+// flattened result keeps the panel's synchronous model append bounded, and
+// titles are clipped so a few huge strings cannot bloat the model either.
+var MAX_TOTAL_BOOKS = 5000
+var MAX_TITLE_CHARS = 300
+function clip(value, max) {
+  var s = String(value === undefined || value === null ? "" : value)
+  return s.length > max ? s.slice(0, max) : s
+}
+
+// Flatten volumes -> chapters into book records, stopping at MAX_TOTAL_BOOKS.
+// formatOf(file) maps a Kavita file object to a format label.
+function flattenBooks(volumes, formatOf) {
+  var books = []
+  volumes = asList(volumes)
+  for (var i = 0; i < volumes.length && books.length < MAX_TOTAL_BOOKS; i++) {
+    var chapters = asList(volumes[i].chapters)
+    for (var j = 0; j < chapters.length && books.length < MAX_TOTAL_BOOKS; j++) {
+      var chapter = chapters[j]
+      if (!isId(chapter.id)) continue
+      var files = asList(chapter.files)
+      var file = files.length > 0 ? files[0] : null
+      books.push({
+        id: chapter.id,
+        name: clip(chapter.title || chapter.titleName || ("Volume " + chapter.number), MAX_TITLE_CHARS),
+        format: formatOf(file),
+        extension: file ? clip(file.extension, 16) : "",
+        volumeId: chapter.volumeId,
+        pages: chapter.pages
+      })
+    }
+  }
+  return books
+}
+
 // True only for a path strictly below cacheDir without any ".." segment.
 function inCache(path, cacheDir) {
   var p = String(path || "")
@@ -104,7 +140,8 @@ var unrarScript = PREPARE + 'rm -rf "$2" && mkdir -p "$2" '
 
 if (typeof module !== "undefined") {
   module.exports = {
-    isId: isId, asList: asList, MAX_LIST_ITEMS: MAX_LIST_ITEMS, inCache: inCache, safeName: safeName, authConfig: authConfig,
+    isId: isId, asList: asList, MAX_LIST_ITEMS: MAX_LIST_ITEMS,
+    flattenBooks: flattenBooks, clip: clip, MAX_TOTAL_BOOKS: MAX_TOTAL_BOOKS, MAX_TITLE_CHARS: MAX_TITLE_CHARS, inCache: inCache, safeName: safeName, authConfig: authConfig,
     MAX_API_RESPONSE_BYTES: MAX_API_RESPONSE_BYTES, cappedCurlScript: cappedCurlScript,
     PREPARE: PREPARE, startupScript: startupScript, downloadScript: downloadScript, epubScript: epubScript,
     unzipScript: unzipScript, unrarScript: unrarScript

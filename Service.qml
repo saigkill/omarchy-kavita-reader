@@ -142,26 +142,7 @@ Item {
   }
 
   function flattenBooks(volumes) {
-    var books = []
-    volumes = Safety.asList(volumes)
-    for (var i = 0; i < volumes.length; i++) {
-      var chapters = Safety.asList(volumes[i].chapters)
-      for (var j = 0; j < chapters.length; j++) {
-        var chapter = chapters[j]
-        var files = Safety.asList(chapter.files)
-        var file = files.length > 0 ? files[0] : null
-        if (!Safety.isId(chapter.id)) continue
-        books.push({
-          id: chapter.id,
-          name: chapter.title || chapter.titleName || ("Volume " + chapter.number),
-          format: svc.bookFormat(file),
-          extension: file ? String(file.extension || "") : "",
-          volumeId: chapter.volumeId,
-          pages: chapter.pages
-        })
-      }
-    }
-    return books
+    return Safety.flattenBooks(volumes, svc.bookFormat)
   }
 
   function downloadBook(bookId, fileName) {
